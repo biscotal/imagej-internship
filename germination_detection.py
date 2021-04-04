@@ -1,22 +1,45 @@
-import csv
 from ij import IJ, WindowManager, ImagePlus
 from ij.measure import ResultsTable as rt
 from ij.measure import Measurements
 from math import *
+import os
+from loci.plugins.util import BFVirtualStack
+from ij.gui import WaitForUserDialog, Toolbar
+from ij.io import OpenDialog
+import csv
 
-IJ.run("Image Sequence...", "open=C:/Users/Valen/Documents/Stage/18_09_12_Cowpea_IRD_2P1_01_B2_zz/Cowpea_____1809121524_2P1_000.tiff sort use")
+#DirectoryImage = WaitForUserDialog ("Image selection", "Select the first image of your Image Sequence")
+#DirectoryImage.show()
+
+od = OpenDialog("Select the first image of your Image Sequence.", None)  
+filename = od.getFileName()  
+  
+if filename is None:  
+  print "User canceled the dialog!"  
+else:  
+  filepath = od.getPath()
+
+IJ.run("Image Sequence...", "open={} sort use".format(str(filepath)))
 IJ.run("Split Channels")
-WindowManager.getImage("18_09_12_Cowpea_IRD_2P1_01_B2_zz (blue)").close()
-WindowManager.getImage("18_09_12_Cowpea_IRD_2P1_01_B2_zz (green)").close()
-imp = WindowManager.getImage("18_09_12_Cowpea_IRD_2P1_01_B2_zz (red)")
+WindowManager.getCurrentImage().close()
+WindowManager.getCurrentImage().close()
+imp = WindowManager.getCurrentImage()
+
+# Asking user to set the threshold and get the size of objets that he wants to detect
 IJ.run("Threshold...")
-IJ.setThreshold(160, 255)
+WaitForUserDialog("Threshold","Set a threshold slider avoiding maximum noise.\nThen click \'OK\'.").show()
 IJ.run("Convert to Mask", "method=Default background=Dark black")
 IJ.run("Set Measurements...", "area center display add redirect=None decimal=3")
 imp.show()
 IJ.run("Duplicate...", " ")
 imp2 = WindowManager.getCurrentImage()
-IJ.run("Analyze Particles...", "size=10-Infinity display exclude")
+IJ.setTool(Toolbar.WAND)
+WaitForUserDialog("Select an object","Click on the (almost) smallest object that you want to detect.\nThen click \'OK\'.").show()
+IJ.run("Measure")
+minimumSizeOfObject = rt.getResultsTable().getValueAsDouble(0,0)/2
+rt.getResultsTable().reset()
+IJ.run("Select None")
+IJ.run("Analyze Particles...", "size={}-Infinity display exclude".format(minimumSizeOfObject))
 IJ.saveAs("Results", "C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis.csv")
 imp2.close()
 
@@ -25,12 +48,7 @@ nbOfSlices = imp.getNSlices()
 
 rt.getResultsTable().reset()
 
-#nbOfSeed=int(nbOfSeed)
-#nbOfSlices=int(nbOfSlices)
-
 imp.show()
-
-stack = imp.getStack()
 
 File = open('C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis.csv')
 
