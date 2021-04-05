@@ -5,18 +5,33 @@ from math import *
 import os
 from loci.plugins.util import BFVirtualStack
 from ij.gui import WaitForUserDialog, Toolbar
-from ij.io import OpenDialog
+from ij.io import OpenDialog, SaveDialog
 import csv
 
-od = OpenDialog("Select the first image of your Image Sequence.", None)  
-filename = od.getFileName()  
+def openAnImageDialog(text):
+	od = OpenDialog(text, None)  
+	filename = od.getFileName()  
   
-if filename is None:  
-  print "User canceled the dialog!"  
-else:  
-  filepath = od.getPath()
+	if filename is None:  
+  		print "User canceled the dialog!"  
+	else:  
+  		return od.getPath()
 
-IJ.run("Image Sequence...", "open={} sort use".format(str(filepath)))
+def saveAFileDialog():
+   od = SaveDialog("Save ...","results",".csv")  
+   filename = od.getFileName()
+   directory = od.getDirectory()
+   filepath = directory + filename  
+  
+   if filename is None:  
+      print "User canceled the dialog!"  
+   else:  
+      return filepath
+
+
+imageFilePath = openAnImageDialog("Select the first image of your Image Sequence.")
+
+IJ.run("Image Sequence...", "open={} sort use".format(imageFilePath))
 IJ.run("Split Channels")
 WindowManager.getCurrentImage().close()
 WindowManager.getCurrentImage().close()
@@ -33,11 +48,17 @@ imp2 = WindowManager.getCurrentImage()
 IJ.setTool(Toolbar.WAND)
 WaitForUserDialog("Select an object","Click on the (almost) smallest object that you want to detect.\nThen click \'OK\'.").show()
 IJ.run("Measure")
-minimumSizeOfObject = rt.getResultsTable().getValueAsDouble(0,0)/2
+minimumSizeOfObject = rt.getResultsTable().getValueAsDouble(0,0)/3
+getrt = rt.getResultsTable()
 rt.getResultsTable().reset()
+
+# Begining of the analyze
 IJ.run("Select None")
 IJ.run("Analyze Particles...", "size={}-Infinity display exclude".format(minimumSizeOfObject))
-IJ.saveAs("Results", "C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis.csv")
+saveFirstResultsPath = saveAFileDialog()
+saveLastResultsPath = saveFirstResultsPath[:-3] + "txt"
+WaitForUserDialog("Information !","The analysis will start !\nResults will be saved at \"{}\".".format(saveLastResultsPath)).show()
+IJ.saveAs("Results", saveFirstResultsPath)
 imp2.close()
 
 nbOfSeed = rt.getResultsTable().size()-1 # I take the number of seeds detected
@@ -47,7 +68,7 @@ rt.getResultsTable().reset()
 
 imp.show()
 
-File = open('C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis.csv')
+File = open(saveFirstResultsPath)
 
 fichierCSV = csv.reader(File)
 next(fichierCSV)
@@ -64,11 +85,11 @@ for line in fichierCSV:
       IJ.doWand(XM, YM)
       IJ.run("Measure");
 
-IJ.saveAs("Results", "C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis_for_MATLAB.csv")      
+IJ.saveAs("Results", saveFirstResultsPath)      
 
 File.close()
 
-File_2 = open('C:/Users/Valen/Documents/Stage/Semaine 1/particles_analysis_for_MATLAB.csv')
+File_2 = open(saveFirstResultsPath)
 
 fichierCSV_2 = csv.reader(File_2)
 next(fichierCSV_2)
@@ -94,16 +115,16 @@ Yposition=[]
 for seedNb in range(0,nbOfSeed):
    sliceNb=seedNb*nbOfSlices 
    deltaR=0
-   while deltaR < 3 and sliceNb<(len(liste_X)-1):
+   while deltaR < 1 and sliceNb<(len(liste_X)-1):
       Rprec=sqrt(liste_X[sliceNb]**2+liste_Y[sliceNb]**2)
       R=sqrt(liste_X[sliceNb+1]**2+liste_Y[sliceNb+1]**2)
       deltaR=abs(Rprec-R)
       sliceNb= sliceNb + 1
-   startOfGermination.append(sliceNb-(seedNb*nbOfSlices))
+   startOfGermination.append(sliceNb-(seedNb*nbOfSlices)+1)
    Xposition.append(round(liste_X[sliceNb],3))
    Yposition.append(round(liste_Y[sliceNb],3))
 
-with open('C:/Users/Valen/Documents/Stage/Semaine 1/Begining_of_germination.txt','w') as fic:
+with open(saveLastResultsPath,'w') as fic:
 	fic.write('Time\tX\tY\n')
 	for elt in range(0,nbOfSeed):
 		fic.write(str(startOfGermination[elt])+'  ')
