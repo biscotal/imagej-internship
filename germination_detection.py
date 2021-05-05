@@ -1,13 +1,16 @@
 from ij import IJ, WindowManager, ImagePlus
 from ij.measure import ResultsTable as rt
 from ij.measure import Measurements
-from math import *
+from math import sqrt
 import os
 from loci.plugins.util import BFVirtualStack
 from ij.gui import WaitForUserDialog, Toolbar
 from ij.io import OpenDialog, SaveDialog
 import csv
 from javax.swing import JOptionPane
+from java.awt import Font, Color
+import time
+from ij.gui import Roi, OvalRoi, Overlay, GenericDialog
 
 def openAnImageDialog(text):
 	od = OpenDialog(text, None)  
@@ -29,6 +32,41 @@ def saveAFileDialog():
    else:  
       return filepath
 
+def highlightSeeds(sliceNb,seedNb,Xposition,Yposition,imp):
+	x = Xposition[seedNb]
+	y = Yposition[seedNb]
+	imp.setSlice(sliceNb)
+	overlay = Overlay()
+	roi = OvalRoi(x-50,y-50,100,100)
+	roi.setStrokeColor(Color.green)
+	roi.setStrokeWidth(10)
+	imp.setRoi(roi)
+	return roi
+
+# Ask user for parameters
+gui = GenericDialog("Which parameters do you want to measure ?")
+
+gui.addMessage("Choose parameters that you want to measure, then click OK.\n(Area and Center of Mass are already checked)")
+gui.addCheckbox("Perimeter", True)
+gui.addCheckbox("Coordonates of bounding box", True)
+gui.addCheckbox("Shape (Width and height)", True)
+
+gui.showDialog() 
+
+if gui.wasOKed():
+   perimeter = gui.getNextBoolean()
+   bounding = gui.getNextBoolean()
+   shape = gui.getNextBoolean()
+
+parameters = "area center"
+
+if perimeter == True:
+	parameters = parameters + " perimeter"
+if bounding == True:
+	parameters = parameters + " bounding"
+if shape == True:
+	parameters = parameters + " shape"
+
 
 # Stack or Image Sequence ?
 
@@ -36,7 +74,7 @@ myAnswer = ""
 possibleAnswers = ["Image Sequence", "Stack (only one file)"]
 while myAnswer == "":
   myAnswer = JOptionPane.showInputDialog(None, "Which type of image ?", \
-  "Test", JOptionPane.QUESTION_MESSAGE, None, possibleAnswers, possibleAnswers[1])
+  "Choose", JOptionPane.QUESTION_MESSAGE, None, possibleAnswers, possibleAnswers[0])
 if myAnswer == None:
   myAnswer = ""
 
@@ -50,6 +88,16 @@ if myAnswer == "Stack (only one file)":
 	imageFilePath = openAnImageDialog("Select your stack.")
 	imp1 = IJ.openImage(imageFilePath)
 	imp1.show()
+
+# Do you want to crop the image ?
+myAnswer = JOptionPane.showConfirmDialog(None, "Do you want to crop images ?")
+if myAnswer == 0:
+   IJ.setTool(Toolbar.RECTANGLE)
+   WaitForUserDialog("What do you want to crop ?","Draw a rectangle.\nThen click \'OK\'.").show()
+   IJ.run("Crop")         
+    
+
+
 IJ.run("Split Channels")
 WindowManager.getCurrentImage().close()
 WindowManager.getCurrentImage().close()
@@ -59,10 +107,11 @@ imp = WindowManager.getCurrentImage()
 IJ.run("Threshold...")
 WaitForUserDialog("Threshold","Set a threshold slider avoiding maximum noise.\nThen click \'OK\'.").show()
 IJ.run("Convert to Mask", "method=Default background=Dark black")
-IJ.run("Set Measurements...", "area center display add redirect=None decimal=3")
+IJ.run("Set Measurements...", "{} display add redirect=None decimal=3".format(parameters))
 imp.show()
 IJ.run("Duplicate...", " ")
 imp2 = WindowManager.getCurrentImage()
+IJ.run(imp2, "Options...", "iterations=1 count=1 black do=Nothing")
 IJ.setTool(Toolbar.WAND)
 WaitForUserDialog("Select an object","Click on one of the smallest objects that you want to detect.\nThen click \'OK\'.").show()
 IJ.run("Measure")
@@ -107,24 +156,41 @@ for line in fichierCSV:
       IJ.doWand(XM, YM)
       IJ.run("Measure")
 
-IJ.saveAs("Results", saveFirstResultsPath)      
+IJ.saveAs("Results", saveFirstResultsPath)  
+
+rt.getResultsTable().reset()
 
 File.close()
+
+#Time calibration
+
+listeTemps = ['18/09/12 15:24']
+date = listeTemps[0][:8]
+jour = date[6:]
+heure = listeTemps[0][9:][:2]
+minutes = listeTemps[0][-3:]
+heure = int(heure)
+jour = int(jour)
+for i in range(1,116):
+    if heure<23:
+        heure = heure + 1
+    else:
+        heure = 0
+        jour = jour + 1
+    date = date[:6]+str(jour)+' '+str(heure)+minutes
+    listeTemps.append(date)
 
 File_2 = open(saveFirstResultsPath)
 
 fichierCSV_2 = csv.reader(File_2)
 next(fichierCSV_2)
 
-liste_area=[]
 liste_X=[]
 liste_Y=[]
 
 for line in fichierCSV_2:
-   #area = int(line[2])
    X = float(line[3])
    Y = float(line[4])
-   #liste_area.append(area)
    liste_X.append(X)
    liste_Y.append(Y)
 
@@ -133,6 +199,7 @@ File_2.close()
 startOfGermination=[]
 Xposition=[]
 Yposition=[]
+#listeDeltaR=[]
 
 for seedNb in range(0,nbOfSeed):
    sliceNb=seedNb*nbOfSlices 
@@ -142,13 +209,33 @@ for seedNb in range(0,nbOfSeed):
       R=sqrt(liste_X[sliceNb+1]**2+liste_Y[sliceNb+1]**2)
       deltaR=abs(Rprec-R)
       sliceNb= sliceNb + 1
+   #listeDeltaR.append(deltaR)
    startOfGermination.append(sliceNb-(seedNb*nbOfSlices)+1)
    Xposition.append(round(liste_X[sliceNb],3))
    Yposition.append(round(liste_Y[sliceNb],3))
 
 with open(saveLastResultsPath,'w') as fic:
-	fic.write('Time\tX\tY\n')
+	fic.write('\tTime\tX\tY\n')
 	for elt in range(0,nbOfSeed):
-		fic.write(str(startOfGermination[elt])+'  ')
+		fic.write(str(listeTemps[startOfGermination[elt]-1])+'  ')
 		fic.write(str(Xposition[elt])+'  ') 
 		fic.write(str(Yposition[elt])+'\n')
+
+# Highlight seeds
+imp.show()
+IJ.run("Select None")
+
+listeSeedNb = []
+for sliceNb in range(1,nbOfSlices+1):
+	#listeSeedNb = []
+	#listeSeedNb[:] = []
+	for seedNb in range(0,nbOfSeed):
+		if startOfGermination[seedNb] == sliceNb:
+			listeSeedNb.append(seedNb)
+	if listeSeedNb != None:
+		overlay = Overlay()
+		for i in range(0,len(listeSeedNb)):
+			roi = highlightSeeds(sliceNb,listeSeedNb[i],Xposition,Yposition,imp)
+			overlay.add(roi)
+		imp.setOverlay(overlay)
+		time.sleep(1)  
