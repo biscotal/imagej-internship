@@ -10,7 +10,7 @@ import csv
 from javax.swing import JOptionPane
 from java.awt import Font, Color
 import time
-from ij.gui import Roi, OvalRoi, Overlay, GenericDialog
+from ij.gui import Roi, OvalRoi, Overlay, GenericDialog, TextRoi
 
 def openAnImageDialog(text):
 	od = OpenDialog(text, None)  
@@ -37,11 +37,23 @@ def highlightSeeds(sliceNb,seedNb,Xposition,Yposition,imp):
 	y = Yposition[seedNb]
 	imp.setSlice(sliceNb)
 	overlay = Overlay()
-	roi = OvalRoi(x-50,y-50,100,100)
-	roi.setStrokeColor(Color.green)
-	roi.setStrokeWidth(10)
+	roi = OvalRoi(x-10,y-10,20,20)
+	roi.setStrokeColor(Color.red)
+	roi.setStrokeWidth(20)
 	imp.setRoi(roi)
 	return roi
+
+def addLabel(sliceNb,seedNb,labelList,Xposition,Yposition,imp):
+   x = Xposition[seedNb]
+   y = Yposition[seedNb]
+   imp.setSlice(sliceNb)
+   overlay = Overlay()
+   font = Font("SanSerif", Font.PLAIN, 35)
+   roi = TextRoi(x, y, str(labelList[seedNb]), font)
+   roi.setStrokeColor(Color.yellow)
+   roi.setFillColor(Color(0,0,0,0.8))
+   imp.setRoi(roi)
+   return roi 
 
 # Ask user for parameters
 gui = GenericDialog("Which parameters do you want to measure ?")
@@ -128,12 +140,12 @@ WaitForUserDialog("Information !","The analysis will start !\nResults will be sa
 IJ.saveAs("Results", saveFirstResultsPath)
 imp2.close()
 
-nbOfSeed = rt.getResultsTable().size() # I take the number of seeds detected
+nbOfSeed = rt.getResultsTable().size()
 nbOfSlices = imp.getNSlices()
 
 rt.getResultsTable().reset()
 
-imp.show()
+#imp.show()
 
 scale = imp.getCalibration()
 xScale = scale.pixelWidth # x contains the pixel width in units
@@ -150,11 +162,19 @@ for line in fichierCSV:
 
    XM=int(XM)
    YM=int(YM)
+   imp.setSlice(1)
+   IJ.doWand(XM, YM)
+   IJ.run("Measure")
 
-   for i in range(1,imp.getNSlices()+1):
+   for i in range(2,imp.getNSlices()+1):
+      XM = getrt.getValue("XM", getrt.size()-1)
+      XM = int(XM)
+      YM = getrt.getValue("YM", getrt.size()-1)
+      YM = int(YM)
       imp.setSlice(i)
       IJ.doWand(XM, YM)
       IJ.run("Measure")
+
 
 IJ.saveAs("Results", saveFirstResultsPath)  
 
@@ -199,27 +219,29 @@ File_2.close()
 startOfGermination=[]
 Xposition=[]
 Yposition=[]
-#listeDeltaR=[]
+labelList=[]
 
 for seedNb in range(0,nbOfSeed):
    sliceNb=seedNb*nbOfSlices 
    deltaR=0
    while deltaR < 1 and sliceNb<((seedNb+1)*nbOfSlices-1):
-      Rprec=sqrt(liste_X[sliceNb]**2+liste_Y[sliceNb]**2)
-      R=sqrt(liste_X[sliceNb+1]**2+liste_Y[sliceNb+1]**2)
-      deltaR=abs(Rprec-R)
+      if sliceNb > seedNb*nbOfSlices + 8:
+        Rprec=sqrt(liste_X[sliceNb]**2+liste_Y[sliceNb]**2)
+        R=sqrt(liste_X[sliceNb+1]**2+liste_Y[sliceNb+1]**2)
+        deltaR=abs(Rprec-R)
       sliceNb= sliceNb + 1
-   #listeDeltaR.append(deltaR)
+   labelList.append(seedNb+1)
    startOfGermination.append(sliceNb-(seedNb*nbOfSlices)+1)
    Xposition.append(round(liste_X[sliceNb],3))
    Yposition.append(round(liste_Y[sliceNb],3))
 
 with open(saveLastResultsPath,'w') as fic:
-	fic.write('\tTime\tX\tY\n')
-	for elt in range(0,nbOfSeed):
-		fic.write(str(listeTemps[startOfGermination[elt]-1])+'  ')
-		fic.write(str(Xposition[elt])+'  ') 
-		fic.write(str(Yposition[elt])+'\n')
+   fic.write('Label\t Date\t\tX\tY\n')
+   for elt in range(0,nbOfSeed):
+      fic.write('  '+str(labelList[elt])+'  ')
+      fic.write(str(listeTemps[startOfGermination[elt]-1])+'  ')
+      fic.write(str(Xposition[elt])+'  ')
+      fic.write(str(Yposition[elt])+'\n')
 
 # Highlight seeds
 imp.show()
@@ -227,15 +249,15 @@ IJ.run("Select None")
 
 listeSeedNb = []
 for sliceNb in range(1,nbOfSlices+1):
-	#listeSeedNb = []
-	#listeSeedNb[:] = []
-	for seedNb in range(0,nbOfSeed):
-		if startOfGermination[seedNb] == sliceNb:
-			listeSeedNb.append(seedNb)
-	if listeSeedNb != None:
-		overlay = Overlay()
-		for i in range(0,len(listeSeedNb)):
-			roi = highlightSeeds(sliceNb,listeSeedNb[i],Xposition,Yposition,imp)
-			overlay.add(roi)
-		imp.setOverlay(overlay)
-		time.sleep(1)  
+   for seedNb in range(0,nbOfSeed):
+      if startOfGermination[seedNb] == sliceNb:
+         listeSeedNb.append(seedNb)
+   if listeSeedNb != None:
+      overlay = Overlay()
+      for i in range(0,len(listeSeedNb)):
+         roi = highlightSeeds(sliceNb,listeSeedNb[i],Xposition,Yposition,imp)
+         overlay.add(roi)
+         roi = addLabel(sliceNb,listeSeedNb[i],labelList,Xposition,Yposition,imp)
+         overlay.add(roi)
+      imp.setOverlay(overlay)
+      time.sleep(1)  
