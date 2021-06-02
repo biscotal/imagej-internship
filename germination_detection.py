@@ -8,9 +8,6 @@ from ij.gui import WaitForUserDialog, Toolbar
 from ij.io import OpenDialog
 import csv
 
-#DirectoryImage = WaitForUserDialog ("Image selection", "Select the first image of your Image Sequence")
-#DirectoryImage.show()
-
 od = OpenDialog("Select the first image of your Image Sequence.", None)  
 filename = od.getFileName()  
   
